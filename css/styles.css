@@ -1,0 +1,42 @@
+/* removing default spacing to elements */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Font for the whole page */
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+}
+
+/* the container div, adds scroll bar if the grid get too big for the screen */
+#sheetgrid {
+    overflow: auto;
+}
+
+/* avoiding gaps between table cells and their borders */
+table {
+    border-collapse: collapse;
+}
+
+/* targeting header and data celss */
+th, td {
+    border: 1px solid #ccc;
+    width: 80px;
+    height: 25px;
+    text-align: center;
+    font-size: 14px;
+}
+
+/* column letters and row numbers */
+th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+}
+
+/* data cells */
+td {
+    background-color: white;
+}
