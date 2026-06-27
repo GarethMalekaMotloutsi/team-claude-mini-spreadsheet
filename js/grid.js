@@ -52,6 +52,63 @@ class SpreadsheetGrid {
         this.container.appendChild(table);
     }
 
-}
+    // Click, keydown, arrow keys (EVENT LISTENERS)
+    attachEvents() {
+        // Click to select a cell
+        this.container.addEventListener("click", (e) => {
+            const cell = e.target.closest("[data-cell]");
+            if (cell) {
+            this.selectCell(cell.getAttribute("data-cell"));
+            }
+        });  
+        
+        // arrow key navigation
+        document.addEventListener("keydown", (e) => {
+            if (!this.selectedCell) return;
 
+            // reading current cell position
+            const col = this.selectedCell.charCodeAt(0); 
+            const row = parseInt(this.selectedCell.slice(1));
+
+
+            let newCol = col;
+            let newRow = row;
+
+            // depending on which arrow key was pressed, add or subtract 1 from the row or column number.
+            if (e.key === "ArrowUp")    newRow--;
+            if (e.key === "ArrowDown")  newRow++;
+            if (e.key === "ArrowLeft")  newCol--;
+            if (e.key === "ArrowRight") newCol++;
+
+            // Stay within bounds, stops from going off the edge
+            newCol = Math.max(65, Math.min(65 + this.cols - 1, newCol));
+            newRow = Math.max(1, Math.min(this.rows, newRow));
+
+            // Converts the numbers back into a cell ID string like "C5" and calls selectCell() to move there
+            const newCellId = `${String.fromCharCode(newCol)}${newRow}`;
+            this.selectCell(newCellId);
+  
+        });       
+    }
+
+    // Highlight the cell, update formula bar label
+    selectCell(cellId) {
+        // Remove highlight from previous cell
+        if (this.selectedCell) {
+            const prev = this.container.querySelector(`[data-cell="${this.selectedCell}"]`);
+            if (prev) prev.classList.remove("selected");
+        }
+
+        // Update selected cell
+        this.selectedCell = cellId;
+
+        // Highlight new cell
+        const cell = this.container.querySelector(`[data-cell="${cellId}"]`);
+            if (cell) cell.classList.add("selected");
+
+        // Update formula bar label
+        document.getElementById("celllabel").textContent = cellId;
+
+    }
+}
 const sheet = new SpreadsheetGrid("sheetgrid");
