@@ -1,3 +1,5 @@
+import { getCell, commitEdit } from './data.js';
+
 
 class SpreadsheetGrid {
     constructor(containerId, rows = 20, cols = 10) {
@@ -66,6 +68,9 @@ class SpreadsheetGrid {
         document.addEventListener("keydown", (e) => {
             if (!this.selectedCell) return;
 
+            // ignoring arrow keys when formula bar is focused
+            if (document.activeElement === document.getElementById("formulainput")) return;
+
             // reading current cell position
             const col = this.selectedCell.charCodeAt(0); 
             const row = parseInt(this.selectedCell.slice(1));
@@ -86,9 +91,35 @@ class SpreadsheetGrid {
 
             // Converts the numbers back into a cell ID string like "C5" and calls selectCell() to move there
             const newCellId = `${String.fromCharCode(newCol)}${newRow}`;
-            this.selectCell(newCellId);
-  
-        });       
+            this.selectCell(newCellId); 
+        });  
+        
+        // watches the formula bar input for when the user presses Enter.
+        document.getElementById("formulainput").addEventListener("keydown", (e) => {            
+            if (e.key === "Enter" && this.selectedCell) {
+                const raw = document.getElementById("formulainput").value;
+                commitEdit(this.selectedCell, raw);
+            }
+        });
+
+        // function to be able to type directly in the cell not just input bar
+        document.addEventListener("keydown", (e) => {
+            if (document.activeElement === document.getElementById("formulainput")) return;
+            if (!this.selectedCell) return;
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(e.key)) return;
+
+            const input = document.getElementById("formulainput");
+            input.value = e.key;
+            input.focus();
+        });
+
+        // function to see everything you type on the cell live not just the input bar
+        document.getElementById("formulainput").addEventListener("input", (e) => {
+            if (this.selectedCell) {
+                const td = document.querySelector(`[data-cell="${this.selectedCell}"]`);
+                if (td) td.textContent = e.target.value;
+            }
+        });
     }
 
     // Highlight the cell, update formula bar label
@@ -109,6 +140,8 @@ class SpreadsheetGrid {
         // Update formula bar label
         document.getElementById("celllabel").textContent = cellId;
 
+        // show raw value in the formula bar
+        document.getElementById("formulainput").value = getCell(cellId).raw;
     }
 }
 const sheet = new SpreadsheetGrid("sheetgrid");
