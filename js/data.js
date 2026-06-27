@@ -1,3 +1,5 @@
+import { parseFormula } from "./parser.js";
+
 const cells = {};
 
 export function getCell(id) {
@@ -9,7 +11,7 @@ export function getCell(id) {
 
 export function commitEdit(id, raw) {
   getCell(id).raw = raw;
-  getCell(id).value = raw;//@Lerato you will replace this line
+  getCell(id).value = parseFormula(raw, cells);
   updateDOM(id, getCell(id).value);
 }
 
