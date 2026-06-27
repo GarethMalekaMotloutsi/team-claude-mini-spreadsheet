@@ -2,7 +2,7 @@ import { getCell, commitEdit } from './data.js';
 
 
 class SpreadsheetGrid {
-    constructor(containerId, rows = 20, cols = 10) {
+    constructor( rows = 20, cols = 10) {
         this.container = document.getElementById("sheetgrid");
         this.rows = rows;
         this.cols = cols;
@@ -108,6 +108,14 @@ class SpreadsheetGrid {
             if (!this.selectedCell) return;
             if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(e.key)) return;
 
+            // ignore shift, backspace, tab etc
+            if (e.key.length !== 1) return;
+
+            // ignore Ctrl+C, Cmd+V, Alt+anything
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+
+
             const input = document.getElementById("formulainput");
             input.value = e.key;
             input.focus();
@@ -144,4 +152,4 @@ class SpreadsheetGrid {
         document.getElementById("formulainput").value = getCell(cellId).raw;
     }
 }
-const sheet = new SpreadsheetGrid("sheetgrid");
+const sheet = new SpreadsheetGrid();
