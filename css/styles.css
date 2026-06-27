@@ -39,13 +39,6 @@ body {
 }
 
 
-
-
-
-
-
-
-
 /* the container div, adds scroll bar if the grid get too big for the screen */
 #sheetgrid {
     overflow: auto;
