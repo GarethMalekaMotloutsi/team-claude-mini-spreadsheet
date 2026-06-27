@@ -5,10 +5,17 @@
     box-sizing: border-box;
 }
 
+/* html */
+html{
+    height: 100%;
+}
+
+
 /* Font for the whole page */
 body {
     font-family: Arial, sans-serif;
     padding: 20px;
+    height: 100%
 }
 
 /* formularbar */
@@ -42,17 +49,20 @@ body {
 /* the container div, adds scroll bar if the grid get too big for the screen */
 #sheetgrid {
     overflow: auto;
+    height: 100%;
 }
 
 /* avoiding gaps between table cells and their borders */
 table {
     border-collapse: collapse;
+    width: 100%;
+    height:100%;
 }
 
 /* targeting header and data celss */
 th, td {
     border: 1px solid #ccc;
-    width: 80px;
+    width: auto;
     height: 25px;
     text-align: center;
     font-size: 14px;
