@@ -4,6 +4,13 @@ export const dependents = {};
 // Saves which cells depend on another cell
 export function registerDeps(cellId, deps) {
 
+    // Start with the cell that was changed
+    const queue = [cellId];
+    
+    while (queue.length > 0) {
+
+    }
+
     // Go through each cell this formula depends on
      deps.forEach(dep => {
 
