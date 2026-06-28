@@ -96,14 +96,13 @@ class SpreadsheetGrid {
         
         // watches the formula bar input for when the user presses Enter.
         document.getElementById("formulainput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && this.selectedCell) {
+            if (e.key === "Enter" && this.selectedCell) {
+                console.log("ENTER PRESSED");
 
-        console.log("ENTER PRESSED");
-
-        const raw = document.getElementById("formulainput").value;
-        commitEdit(this.selectedCell, raw);
-    }
-});
+                const raw = document.getElementById("formulainput").value;
+                commitEdit(this.selectedCell, raw);
+            }
+        });
 
         // function to be able to type directly in the cell not just input bar
         document.addEventListener("keydown", (e) => {
@@ -117,10 +116,12 @@ class SpreadsheetGrid {
             // ignore Ctrl+C, Cmd+V, Alt+anything
             if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-
+            // preventing the browsers native typing behaviour
+            e.preventDefault();
 
             const input = document.getElementById("formulainput");
             input.value = e.key;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
             input.focus();
         });
 
