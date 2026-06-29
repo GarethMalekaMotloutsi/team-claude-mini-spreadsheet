@@ -81,6 +81,6 @@ td {
 
 /* selecting a table */
 td.selected {
-    background-color: #d6e4f7;
-    outline: 2px solid #1a73e8;
+    background-color: #f1f2f4;
+    outline: 2px solid #35ee1d;
 }
