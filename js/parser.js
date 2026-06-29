@@ -5,10 +5,22 @@ export function parseFormula(formula, cells, currentCellId) {
 
     // If it's not a formula, return it as plain text.
     if (!formula.startsWith("=")) {
+        if (cells[currentCellId]) {
+            cells[currentCellId].deps = [];
+        }
         return formula;
     }
 
     const expression = formula.slice(1).trim();
+
+    const dependencies = extractDependencies(expression);
+    if (cells[currentCellId]) {
+        cells[currentCellId].deps = dependencies;
+    }
+
+    if (hasCycle(currentCellId, cells)) {
+        return "#CIRCULAR";
+    }
 
     try {
         return evaluateExpression(expression, currentCellId, cells);
@@ -320,6 +332,63 @@ export function getRangeCells(rangeStr, cells) {
 }
 
 /**
+ * Extracts all referenced cell IDs from a formula expression.
+ */
+function extractDependencies(expression) {
+    const deps = new Set();
+
+    const cellReferencePattern = /[A-Z]+\d+/g;
+    const matches = expression.match(cellReferencePattern);
+    if (!matches) {
+        return [];
+    }
+
+    for (const match of matches) {
+        deps.add(match);
+    }
+
+    return Array.from(deps);
+}
+
+/**
+ * DFS-based cycle detector.
+ * Checks for self-references and multi-cell circular dependencies.
+ */
+export function hasCycle(cellId, cells, visiting = new Set(), visited = new Set()) {
+    if (visiting.has(cellId)) {
+        return true;
+    }
+
+    if (visited.has(cellId)) {
+        return false;
+    }
+
+    const cell = cells[cellId];
+    if (!cell || !cell.deps || cell.deps.length === 0) {
+        visited.add(cellId);
+        return false;
+    }
+
+    visiting.add(cellId);
+
+    for (const depId of cell.deps) {
+        if (depId === cellId) {
+            visiting.delete(cellId);
+            return true;
+        }
+
+        if (hasCycle(depId, cells, visiting, visited)) {
+            visiting.delete(cellId);
+            return true;
+        }
+    }
+
+    visiting.delete(cellId);
+    visited.add(cellId);
+    return false;
+}
+
+/**
  * Safely resolves a cell's numeric value.
  * Detects cycles and returns #CIRCULAR if found.
  * Converts non-numeric values to 0, empty cells to 0.
@@ -364,38 +433,4 @@ export function getCellValue(cellId, cells, visiting = new Set(), visited = new 
     return isNaN(numValue) ? 0 : numValue;
 }
 
-/**
- * DFS-based cycle detector.
- * Checks for self-references and multi-cell circular dependencies.
- * Returns true if a cycle is found, false otherwise.
- */
-export function hasCycle(cellId, cells, visiting = new Set(), visited = new Set()) {
-    // Self-reference check
-    const cell = cells[cellId];
-    if (!cell || !cell.deps) {
-        return false;
-    }
 
-    // If cellId is in its own dependencies, it's a self-reference
-    if (cell.deps.includes(cellId)) {
-        return true;
-    }
-
-    // Mark as currently visiting
-    if (visiting.has(cellId)) {
-        return true; // Cycle detected
-    }
-
-    visiting.add(cellId);
-
-    // Check all dependencies
-    for (const depId of cell.deps) {
-        if (hasCycle(depId, cells, visiting, visited)) {
-            return true;
-        }
-    }
-
-    visiting.delete(cellId);
-    visited.add(cellId);
-    return false;
-}
