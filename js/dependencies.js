@@ -1,9 +1,12 @@
+import { extractDependencies } from "./parser.js";
+
 // Keeps track of which cells depend on others
 export const dependents = {};
 
 // Saves which cells depend on another cell
-export function registerDeps(cellId, deps) {
+export function registerDeps(cellId, formula) {
 
+    const deps = extractDependencies(formula);
 
     // Go through each cell this formula depends on
      deps.forEach(dep => {

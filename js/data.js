@@ -1,4 +1,5 @@
 import { parseFormula } from "./parser.js";
+import { registerDeps } from "./dependencies.js";
 
 const cells = {};
 
@@ -11,7 +12,11 @@ export function getCell(id) {
 
 export function commitEdit(id, raw) {
   getCell(id).raw = raw;
+
+  registerDeps(id, raw);
+
   getCell(id).value = parseFormula(raw, cells);
+
   updateDOM(id, getCell(id).value);
 }
 
