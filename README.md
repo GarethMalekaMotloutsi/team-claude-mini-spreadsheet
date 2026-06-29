@@ -39,7 +39,7 @@ team-claude-mini-spreadsheet/
 
 Team & Responsibilities
 
-Thami Sithole — Grid & Visual Layer
+Lesedi Modikwe — Grid & Visual Layer
 
 Files: `js/grid.js`, `css/style.css`, `index.html`
 
