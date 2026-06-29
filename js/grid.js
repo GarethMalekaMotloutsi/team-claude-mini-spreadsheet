@@ -110,6 +110,16 @@ class SpreadsheetGrid {
             if (!this.selectedCell) return;
             if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(e.key)) return;
 
+            // handle backspace to clear the cell
+            if(e.key === "Backspace"){
+                e.preventDefault();
+                const input = document.getElementById("formulainput");
+                 input.value = "";
+                input.dispatchEvent(new Event("input", { bubbles: true }));
+                commitEdit(this.selectedCell, "");
+                return;
+            }
+
             // ignore shift, backspace, tab etc
             if (e.key.length !== 1) return;
 
