@@ -10,6 +10,36 @@ html{
     height: 100%;
 }
 
+/* logo and heading */
+.logo-container {
+    max-width: 290px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    height: 64px;
+}
+
+
+
+.logo {
+    height: 60px;
+    width: auto;
+    object-fit: contain;
+    flex-shrink: 0;
+    display: block;
+    border-radius: 18px;
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+    letter-spacing: -0.3px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
 
 /* Font for the whole page */
 body {
@@ -23,6 +53,7 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
+    margin-top: 20px;
     margin-bottom: 10px;
 }
 
