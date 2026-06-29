@@ -415,7 +415,7 @@ function getValue(token, cells, currentCellId) {
     if (cells[token]) {
         const rawValue = cells[token].value;
         const value = Number(rawValue);
-
+    }
     if (!isNaN(value)) {
         return value;
     }
