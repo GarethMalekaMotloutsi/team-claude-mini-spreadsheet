@@ -1,21 +1,23 @@
 export function parseFormula(formula, cells, currentCellId) {
+    if (typeof formula !== "string") {
+        return "";
+    }
 
-    // If it's not a formula, return it as normal text
+    // If it's not a formula, return it as plain text.
     if (!formula.startsWith("=")) {
         return formula;
     }
 
-    formula = formula.slice(1).trim();
+    const expression = formula.slice(1).trim();
 
     try {
-        return evaluateFormula(formula, cells, currentCellId);
+        return evaluateExpression(expression, currentCellId, cells);
     } catch (error) {
         return "#ERROR";
     }
 }
 
-function evaluateFormula(expression, cells, currentCellId) {
-
+function evaluateExpression(expression, currentCellId, cells) {
     const match = expression.match(
         /^([A-Z]+\d+|\d+)\s*([+\-*/])\s*([A-Z]+\d+|\d+)$/
     );
@@ -26,8 +28,8 @@ function evaluateFormula(expression, cells, currentCellId) {
 
     let [, left, operator, right] = match;
 
-    left = getValue(left, cells);
-    right = getValue(right, cells);
+    left = getValue(left, cells, currentCellId);
+    right = getValue(right, cells, currentCellId);
 
     switch (operator) {
         case "+":
@@ -48,14 +50,14 @@ function evaluateFormula(expression, cells, currentCellId) {
     }
 }
 
-function getValue(token, cells) {
-
+function getValue(token, cells, currentCellId) {
     if (/^\d+$/.test(token)) {
         return Number(token);
     }
 
     if (cells[token]) {
-        const value = Number(cells[token].value);
+        const rawValue = cells[token].value;
+        const value = Number(rawValue);
 
         if (isNaN(value)) {
             return 0;
