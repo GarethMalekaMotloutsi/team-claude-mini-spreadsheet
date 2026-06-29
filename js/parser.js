@@ -1,300 +1,72 @@
-import { getCell } from "./data.js";
-
-const ERRORS = {
-    SYNTAX: "#ERROR!",
-    DIV_ZERO: "#DIV/0!",
-    VALUE: "#VALUE!"
-};
-
-export function parseFormula(formula, cells) {
-
-    if (formula === undefined || formula === null) {
-
-        console.log("PARSED RESULT:", result);
-        
+export function parseFormula(formula, cells, currentCellId) {
+    if (typeof formula !== "string") {
         return "";
     }
 
-    formula = String(formula).trim();
-
+    // If it's not a formula, return it as plain text.
     if (!formula.startsWith("=")) {
-
-        if (formula === "") {
-            return "";
+        if (cells[currentCellId]) {
+            cells[currentCellId].deps = [];
         }
-
-        const number = Number(formula);
-
-        if (!isNaN(number)) {
-            return number;
-        }
-
         return formula;
     }
 
     const expression = formula.slice(1).trim();
 
-    if (!expression.length) {
-        return ERRORS.SYNTAX;
+    const dependencies = extractDependencies(expression);
+    if (cells[currentCellId]) {
+        cells[currentCellId].deps = dependencies;
+    }
+
+    if (hasCycle(currentCellId, cells)) {
+        return "#CIRCULAR";
     }
 
     try {
-
-        const tokens = tokenize(expression);
-
-        let position = 0;
-
-        function peek() {
-            return tokens[position];
-        }
-
-        function consume() {
-            return tokens[position++];
-        }
-
-        function parseExpression() {
-
-            let value = parseTerm();
-
-            while (peek() === "+" || peek() === "-") {
-
-                const operator = consume();
-
-                const right = parseTerm();
-
-                value = calculate(value, operator, right);
-            }
-
-            return value;
-        }
-
-        function parseTerm() {
-
-            let value = parseFactor();
-
-            while (peek() === "*" || peek() === "/") {
-
-                const operator = consume();
-
-                const right = parseFactor();
-
-                value = calculate(value, operator, right);
-            }
-
-            return value;
-        }
-
-        function parseFactor() {
-
-            const token = peek();
-
-            if (!token) {
-                throw new Error();
-            }
-
-
-            if (token === "(") {
-
-                consume();
-
-                const value = parseExpression();
-
-                if (peek() !== ")") {
-                    throw new Error();
-                }
-
-                consume();
-
-                return value;
-            }
-
-
-            if (token === "SUM") {
-                return parseFunction("SUM");
-            }
-
-
-            if (token === "AVG") {
-                return parseFunction("AVG");
-            }
-
-
-            if (isNumber(token)) {
-
-                consume();
-
-                return Number(token);
-            }
-
-
-            if (isCell(token)) {
-
-                consume();
-
-                return getCellValue(token, cells);
-            }
-
-            throw new Error();
-        }
-
-        function parseFunction(name) {
-            consume();
-
-            if (consume() !== "(") {
-                throw new Error();
-            }
-
-            const args = [];
-
-            if (peek() !== ")") {
-                args.push(parseExpression());
-
-                while (peek() === ",") {
-                    consume();
-                    args.push(parseExpression());
-                }
-            }
-
-            if (consume() !== ")") {
-                throw new Error();
-            }
-
-            if (name === "SUM") {
-                return args.reduce((sum, value) => sum + value, 0);
-            }
-
-            if (name === "AVG") {
-                if (args.length === 0) {
-                    throw new Error();
-                }
-
-                return args.reduce((sum, value) => sum + value, 0) / args.length;
-            }
-
-            throw new Error();
-        }
-
-        function getCellValue(cell, cells) {
-            const cellData = getCell(cell, cells);
-            const value = cellData && cellData.value;
-
-            if (value === undefined || value === null || value === "") {
-                return 0;
-            }
-
-            const number = Number(value);
-
-            if (!isNaN(number)) {
-                return number;
-            }
-
-            throw new Error();
-        }
-
-        function isNumber(token) {
-            return /^-?\d+(\.\d+)?$/.test(token);
-        }
-
-        function isCell(token) {
-            return /^[A-Za-z]+[0-9]+$/.test(token);
-        }
-
-        function calculate(left, operator, right) {
-            if (typeof left !== "number" || typeof right !== "number") {
-                throw new Error();
-            }
-
-            if (operator === "+") {
-                return left + right;
-            }
-
-            if (operator === "-") {
-                return left - right;
-            }
-
-            if (operator === "*") {
-                return left * right;
-            }
-
-            if (operator === "/") {
-                if (right === 0) {
-                    throw new Error(ERRORS.DIV_ZERO);
-                }
-
-                return left / right;
-            }
-
-            throw new Error();
-        }
-
-        function tokenize(expression) {
-            const tokens = [];
-            let token = "";
-
-            for (let i = 0; i < expression.length; i++) {
-                const char = expression[i];
-
-                if (/\s/.test(char)) {
-                    continue;
-                }
-
-                if ("()+-*/,".includes(char)) {
-                    if (token) {
-                        tokens.push(token);
-                        token = "";
-                    }
-
-                    tokens.push(char);
-                    continue;
-                }
-
-                token += char;
-            }
-
-            if (token) {
-                tokens.push(token);
-            }
-
-            return tokens;
-        }
-
-        const result = parseExpression();
-
-        return result;
+        return evaluateExpression(expression, currentCellId, cells);
     } catch (error) {
-        return error.message === ERRORS.DIV_ZERO ? ERRORS.DIV_ZERO : ERRORS.SYNTAX;
+        return "#ERROR";
     }
 }
 
+function evaluateExpression(expression, currentCellId, cells) {
+    // Try to match function calls: SUM(...), AVERAGE(...), IF(...)
+    const functionMatch = expression.match(/^(SUM|AVERAGE|IF)\s*\((.*)\)$/i);
+    if (functionMatch) {
+        const funcName = functionMatch[1].toUpperCase();
+        const args = functionMatch[2];
 
-function tokenize(expression) {
-
-    const regex =
-        /SUM|AVG|[A-Z]+\d+|-?\d+(\.\d+)?|[()+\-*/:,]/g;
-
-    const tokens = expression.match(regex);
-
-    if (!tokens) {
-        throw new Error(ERRORS.SYNTAX);
+        switch (funcName) {
+            case "SUM":
+                return evaluateSUM(args, cells);
+            case "AVERAGE":
+                return evaluateAVERAGE(args, cells);
+            case "IF":
+                return evaluateIF(args, cells);
+            default:
+                return "#ERROR";
+        }
     }
 
-    return tokens;
-}
-
-
-function calculate(left, operator, right) {
-
-    if (typeof left === "string" && left.startsWith("#")) {
-        return left;
+    // Handle direct cell references and numeric values: A1 or 5
+    const singleValueMatch = expression.match(/^([A-Z]+\d+|\d+)$/);
+    if (singleValueMatch) {
+        return getValue(singleValueMatch[1], cells, currentCellId);
     }
 
-    if (typeof right === "string" && right.startsWith("#")) {
-        return right;
+    // Try to match simple binary operations: A1 + B1, 5 * C3, etc.
+    const binaryMatch = expression.match(
+        /^([A-Z]+\d+|\d+)\s*([+\-*/])\s*([A-Z]+\d+|\d+)$/
+    );
+
+    if (!binaryMatch) {
+        return "#ERROR";
     }
 
-    if (typeof left !== "number" || typeof right !== "number") {
-        return ERRORS.VALUE;
-    }
+    let [, left, operator, right] = binaryMatch;
+
+    left = getValue(left, cells, currentCellId);
+    right = getValue(right, cells, currentCellId);
 
     switch (operator) {
 
@@ -320,109 +92,497 @@ function calculate(left, operator, right) {
     }
 }
 
-function getCellValue(cellId, cells) {
+/**
+ * Evaluates SUM(range) function.
+ * Example: SUM(A1:A5) returns the sum of all numeric values in the range.
+ */
+function evaluateSUM(args, cells) {
+    const rangeStr = args.trim();
+    const rangeCells = getRangeCells(rangeStr, cells);
 
-    const cell = cells[cellId];
-
-    if (!cell || cell.value === "" || cell.value === null || cell.value === undefined) {
+    if (rangeCells.length === 0) {
         return 0;
     }
 
-    if (typeof cell.value === "string" && cell.value.startsWith("#")) {
-        return cell.value;
+    let sum = 0;
+    for (const cell of rangeCells) {
+        const val = Number(cell.value);
+        if (!isNaN(val)) {
+            sum += val;
+        }
     }
 
-    const value = Number(cell.value);
+    return sum;
+}
+
+/**
+ * Evaluates AVERAGE(range) function.
+ * Example: AVERAGE(A1:A5) returns the average of all numeric values in the range.
+ */
+function evaluateAVERAGE(args, cells) {
+    const rangeStr = args.trim();
+    const rangeCells = getRangeCells(rangeStr, cells);
+
+    if (rangeCells.length === 0) {
+        return 0;
+    }
+
+    let sum = 0;
+    let count = 0;
+    for (const cell of rangeCells) {
+        const val = Number(cell.value);
+        if (!isNaN(val)) {
+            sum += val;
+            count++;
+        }
+    }
+
+    if (count === 0) {
+        return 0;
+    }
+
+    return sum / count;
+}
+
+/**
+ * Evaluates IF(condition, trueValue, falseValue) function.
+ * Example: IF(A1>5, 10, 20) returns 10 if A1 > 5, otherwise 20.
+ * Supports operators: >, <, >=, <=, =, !=
+ */
+function evaluateIF(args, cells) {
+    // Split arguments by comma, but need to be careful about nested commas
+    const parts = splitFunctionArgs(args);
+    if (parts.length !== 3) {
+        return "#ERROR";
+    }
+
+    const [conditionStr, trueValueStr, falseValueStr] = parts.map(p => p.trim());
+
+    // Evaluate the condition
+    const conditionResult = evaluateCondition(conditionStr, cells);
+    if (conditionResult === "#ERROR") {
+        return "#ERROR";
+    }
+
+    // Get the appropriate value based on condition result
+    const resultStr = conditionResult ? trueValueStr : falseValueStr;
+
+    // Evaluate the result value (could be a cell reference or a number)
+    return evaluateValue(resultStr, cells);
+}
+
+/**
+ * Splits function arguments by commas, respecting nested parentheses.
+ */
+function splitFunctionArgs(args) {
+    const parts = [];
+    let current = "";
+    let depth = 0;
+
+    for (let i = 0; i < args.length; i++) {
+        const char = args[i];
+        if (char === "(" || char === "[") {
+            depth++;
+            current += char;
+        } else if (char === ")" || char === "]") {
+            depth--;
+            current += char;
+        } else if (char === "," && depth === 0) {
+            parts.push(current);
+            current = "";
+        } else {
+            current += char;
+        }
+    }
+
+    if (current) {
+        parts.push(current);
+    }
+
+    return parts;
+}
+
+/**
+ * Evaluates a condition like "A1>5" or "B2=10".
+ * Returns true or false; returns #ERROR for invalid conditions.
+ */
+function evaluateCondition(conditionStr, cells) {
+    // Match patterns like: A1 > 5, B2 = 10, C3 != 0, etc.
+    const conditionMatch = conditionStr.match(/^([A-Z]+\d+|\d+)\s*(>|<|>=|<=|=|!=|==)\s*([A-Z]+\d+|\d+)$/);
+
+    if (!conditionMatch) {
+        return "#ERROR";
+    }
+
+    let [, left, operator, right] = conditionMatch;
+
+    left = getValue(left, cells);
+    right = getValue(right, cells);
+
+    switch (operator) {
+        case ">":
+            return left > right;
+        case "<":
+            return left < right;
+        case ">=":
+            return left >= right;
+        case "<=":
+            return left <= right;
+        case "=":
+        case "==":
+            return left === right;
+        case "!=":
+            return left !== right;
+        default:
+            return "#ERROR";
+    }
+}
+
+/**
+ * Evaluates SUM(range) function.
+ * Example: SUM(A1:A5) returns the sum of all numeric values in the range.
+ */
+function evaluateSUM(args, cells) {
+    const rangeStr = args.trim();
+    const rangeCells = getRangeCells(rangeStr, cells);
+
+    if (rangeCells.length === 0) {
+        return 0;
+    }
+
+    let sum = 0;
+    for (const cell of rangeCells) {
+        const val = Number(cell.value);
+        if (!isNaN(val)) {
+            sum += val;
+        }
+    }
+
+    return sum;
+}
+
+/**
+ * Evaluates AVERAGE(range) function.
+ * Example: AVERAGE(A1:A5) returns the average of all numeric values in the range.
+ */
+function evaluateAVERAGE(args, cells) {
+    const rangeStr = args.trim();
+    const rangeCells = getRangeCells(rangeStr, cells);
+
+    if (rangeCells.length === 0) {
+        return 0;
+    }
+
+    let sum = 0;
+    let count = 0;
+    for (const cell of rangeCells) {
+        const val = Number(cell.value);
+        if (!isNaN(val)) {
+            sum += val;
+            count++;
+        }
+    }
+
+    if (count === 0) {
+        return 0;
+    }
+
+    return sum / count;
+}
+
+/**
+ * Evaluates IF(condition, trueValue, falseValue) function.
+ * Example: IF(A1>5, 10, 20) returns 10 if A1 > 5, otherwise 20.
+ * Supports operators: >, <, >=, <=, =, !=
+ */
+function evaluateIF(args, cells) {
+    // Split arguments by comma, but need to be careful about nested commas
+    const parts = splitFunctionArgs(args);
+    if (parts.length !== 3) {
+        return "#ERROR";
+    }
+
+    const [conditionStr, trueValueStr, falseValueStr] = parts.map(p => p.trim());
+
+    // Evaluate the condition
+    const conditionResult = evaluateCondition(conditionStr, cells);
+    if (conditionResult === "#ERROR") {
+        return "#ERROR";
+    }
+
+    // Get the appropriate value based on condition result
+    const resultStr = conditionResult ? trueValueStr : falseValueStr;
+
+    // Evaluate the result value (could be a cell reference or a number)
+    return evaluateValue(resultStr, cells);
+}
+
+/**
+ * Splits function arguments by commas, respecting nested parentheses.
+ */
+function splitFunctionArgs(args) {
+    const parts = [];
+    let current = "";
+    let depth = 0;
+
+    for (let i = 0; i < args.length; i++) {
+        const char = args[i];
+        if (char === "(" || char === "[") {
+            depth++;
+            current += char;
+        } else if (char === ")" || char === "]") {
+            depth--;
+            current += char;
+        } else if (char === "," && depth === 0) {
+            parts.push(current);
+            current = "";
+        } else {
+            current += char;
+        }
+    }
+
+    if (current) {
+        parts.push(current);
+    }
+
+    return parts;
+}
+
+/**
+ * Evaluates a condition like "A1>5" or "B2=10".
+ * Returns true or false; returns #ERROR for invalid conditions.
+ */
+function evaluateCondition(conditionStr, cells) {
+    // Match patterns like: A1 > 5, B2 = 10, C3 != 0, etc.
+    const conditionMatch = conditionStr.match(/^([A-Z]+\d+|\d+)\s*(>|<|>=|<=|=|!=|==)\s*([A-Z]+\d+|\d+)$/);
+
+    if (!conditionMatch) {
+        return "#ERROR";
+    }
+
+    let [, left, operator, right] = conditionMatch;
+
+    left = getValue(left, cells);
+    right = getValue(right, cells);
+
+    switch (operator) {
+        case ">":
+            return left > right;
+        case "<":
+            return left < right;
+        case ">=":
+            return left >= right;
+        case "<=":
+            return left <= right;
+        case "=":
+        case "==":
+            return left === right;
+        case "!=":
+            return left !== right;
+        default:
+            return "#ERROR";
+    }
+}
+
+/**
+ * Evaluates a value which could be a cell reference, a number, or a range.
+ */
+function evaluateValue(valueStr, cells) {
+    valueStr = valueStr.trim();
+
+    // Try to parse as a number
+    const numVal = Number(valueStr);
+    if (!isNaN(numVal)) {
+        return numVal;
+    }
+
+    // Try to parse as a cell reference
+    const cellId = parseCellId(valueStr);
+    if (cellId && cells[cellId]) {
+        const val = Number(cells[cellId].value);
+        return isNaN(val) ? 0 : val;
+    }
+
+    // Default to 0 for invalid values
+    return 0;
+}
+
+function getValue(token, cells, currentCellId) {
+    if (/^\d+$/.test(token)) {
+        return Number(token);
+    }
+
+    if (cells[token]) {
+        const rawValue = cells[token].value;
+        const value = Number(rawValue);
 
     if (!isNaN(value)) {
         return value;
     }
 
-    return ERRORS.VALUE;
+    return 0;
 }
 
-function expandRange(start, end, cells) {
+// ===== UTILITY FUNCTIONS =====
 
-    const values = [];
+/**
+ * Validates a cell ID (e.g., "A1", "Z99").
+ * Returns the normalized ID if valid, null otherwise.
+ */
+export function parseCellId(token) {
+    if (typeof token !== "string") return null;
+    const match = token.match(/^([A-Z]+)(\d+)$/);
+    if (!match) return null;
+    return token;
+}
 
-    const startCol = columnToNumber(start.match(/[A-Z]+/)[0]);
-    const endCol = columnToNumber(end.match(/[A-Z]+/)[0]);
+/**
+ * Converts a range string like "A1:C3" into an array of cell IDs.
+ * Returns an empty array if the range is invalid.
+ */
+export function parseRange(rangeStr) {
+    if (typeof rangeStr !== "string") return [];
 
-    const startRow = Number(start.match(/\d+/)[0]);
-    const endRow = Number(end.match(/\d+/)[0]);
+    const parts = rangeStr.split(":");
+    if (parts.length !== 2) return [];
 
-    const minCol = Math.min(startCol, endCol);
-    const maxCol = Math.max(startCol, endCol);
+    const startCell = parseCellId(parts[0].trim());
+    const endCell = parseCellId(parts[1].trim());
 
-    const minRow = Math.min(startRow, endRow);
-    const maxRow = Math.max(startRow, endRow);
+    if (!startCell || !endCell) return [];
 
-    for (let col = minCol; col <= maxCol; col++) {
+    const startCol = startCell.charCodeAt(0);
+    const startRow = parseInt(startCell.slice(1));
+    const endCol = endCell.charCodeAt(0);
+    const endRow = parseInt(endCell.slice(1));
 
-        for (let row = minRow; row <= maxRow; row++) {
+    if (isNaN(startRow) || isNaN(endRow)) return [];
 
-            const id = numberToColumn(col) + row;
-
-            const value = getCellValue(id, cells);
-
-            if (typeof value === "number") {
-                values.push(value);
-            }
+    const cells = [];
+    for (let col = Math.min(startCol, endCol); col <= Math.max(startCol, endCol); col++) {
+        for (let row = Math.min(startRow, endRow); row <= Math.max(startRow, endRow); row++) {
+            cells.push(`${String.fromCharCode(col)}${row}`);
         }
     }
 
-    return values;
+    return cells;
 }
 
+/**
+ * Returns an array of cell objects for all cells in a range or single reference.
+ * Handles both single cells (A1) and ranges (A1:C3).
+ */
+export function getRangeCells(rangeStr, cells) {
+    const singleCell = parseCellId(rangeStr.trim());
+    let cellIds = [];
 
-function columnToNumber(column) {
-
-    let number = 0;
-
-    for (const letter of column) {
-        number = number * 26 + (letter.charCodeAt(0) - 64);
+    if (singleCell) {
+        cellIds = [singleCell];
+    } else {
+        cellIds = parseRange(rangeStr);
     }
 
-    return number;
+    return cellIds.map(id => cells[id] || { raw: "", value: 0, deps: [] });
 }
 
-function numberToColumn(number) {
+/**
+ * Extracts all referenced cell IDs from a formula expression.
+ */
+export function extractDependencies(expression) {
+    const deps = new Set();
 
-    let column = "";
-
-    while (number > 0) {
-
-        const remainder = (number - 1) % 26;
-
-        column = String.fromCharCode(65 + remainder) + column;
-
-        number = Math.floor((number - 1) / 26);
-    }
-
-    return column;
-}
-
-
-function isNumber(token) {
-    return /^-?\d+(\.\d+)?$/.test(token);
-}
-
-function isCell(token) {
-    return /^[A-Z]+\d+$/.test(token);
-}
-
-
-export function extractDependencies(formula) {
-
-    if (!formula || !formula.startsWith("=")) {
-        return [];
-    }
-
-    const matches = formula.match(/[A-Z]+\d+/g);
-
+    const cellReferencePattern = /[A-Z]+\d+/g;
+    const matches = expression.match(cellReferencePattern);
     if (!matches) {
         return [];
     }
 
-    return [...new Set(matches)];
+    for (const match of matches) {
+        deps.add(match);
+    }
+
+    return Array.from(deps);
+}
+
+/**
+ * DFS-based cycle detector.
+ * Checks for self-references and multi-cell circular dependencies.
+ */
+export function hasCycle(cellId, cells, visiting = new Set(), visited = new Set()) {
+    if (visiting.has(cellId)) {
+        return true;
+    }
+
+    if (visited.has(cellId)) {
+        return false;
+    }
+
+    const cell = cells[cellId];
+    if (!cell || !cell.deps || cell.deps.length === 0) {
+        visited.add(cellId);
+        return false;
+    }
+
+    visiting.add(cellId);
+
+    for (const depId of cell.deps) {
+        if (depId === cellId) {
+            visiting.delete(cellId);
+            return true;
+        }
+
+        if (hasCycle(depId, cells, visiting, visited)) {
+            visiting.delete(cellId);
+            return true;
+        }
+    }
+
+    visiting.delete(cellId);
+    visited.add(cellId);
+    return false;
+}
+
+/**
+ * Safely resolves a cell's numeric value.
+ * Detects cycles and returns #CIRCULAR if found.
+ * Converts non-numeric values to 0, empty cells to 0.
+ */
+export function getCellValue(cellId, cells, visiting = new Set(), visited = new Set()) {
+    // Cycle detection: if cellId is currently being visited, we have a cycle
+    if (visiting.has(cellId)) {
+        return "#CIRCULAR";
+    }
+
+    // Already visited and resolved; return its value
+    if (visited.has(cellId)) {
+        const cell = cells[cellId];
+        if (cell) {
+            const val = Number(cell.value);
+            return isNaN(val) ? 0 : val;
+        }
+        return 0;
+    }
+
+    // Mark as currently visiting
+    visiting.add(cellId);
+
+    const cell = cells[cellId];
+    if (!cell) {
+        visiting.delete(cellId);
+        visited.add(cellId);
+        return 0;
+    }
+
+    const rawValue = cell.value;
+    if (rawValue === "#CIRCULAR" || rawValue === "#ERROR") {
+        visiting.delete(cellId);
+        visited.add(cellId);
+        return rawValue;
+    }
+
+    const numValue = Number(rawValue);
+    visiting.delete(cellId);
+    visited.add(cellId);
+
+    return isNaN(numValue) ? 0 : numValue;
 }

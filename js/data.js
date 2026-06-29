@@ -1,5 +1,4 @@
-import { parseFormula } from "./parser.js";
-import { registerDeps } from "./dependencies.js";
+import { parseFormula, extractDependencies } from "./parser.js";
 
 const cells = {};
 
@@ -11,24 +10,52 @@ export function getCell(id) {
 }
 
 export function commitEdit(id, raw) {
-  getCell(id).raw = raw;
+  const cell = getCell(id);
+  cell.raw = raw;
+  refreshAllCells();
+}
 
-  registerDeps(id, raw);
+function refreshAllCells() {
+  const ids = Object.keys(cells);
 
-  getCell(id).value = parseFormula(raw, cells);
+  // First pass: compute dependencies for every cell.
+  for (const id of ids) {
+    const cell = cells[id];
+    if (typeof cell.raw === 'string' && cell.raw.startsWith('=')) {
+      cell.deps = extractDependencies(cell.raw.slice(1).trim());
+    } else {
+      cell.deps = [];
+    }
+  }
 
-  updateDOM(id, getCell(id).value);
+  // Second pass: evaluate all cells until values stabilize.
+  let changed = true;
+  let pass = 0;
+  const maxPasses = ids.length * 2;
+
+  while (changed && pass < maxPasses) {
+    changed = false;
+    pass += 1;
+
+    for (const id of ids) {
+      const cell = cells[id];
+      const newValue = parseFormula(cell.raw, cells, id);
+      if (cell.value !== newValue) {
+        cell.value = newValue;
+        changed = true;
+      }
+    }
+  }
+
+  // Update DOM for all cells.
+  for (const id of ids) {
+    updateDOM(id, cells[id].value);
+  }
 }
 
 export function updateDOM(id, value) {
+  if (typeof document === 'undefined') return;
   const td = document.querySelector(`[data-cell="${id}"]`);
   if (!td) return;
   td.textContent = value;
-
-   // Color errors with red
-  if (String(value).startsWith("#")) {
-    td.classList.add("cell-error");
-  } else {
-    td.classList.remove("cell-error");
-  }
 }
