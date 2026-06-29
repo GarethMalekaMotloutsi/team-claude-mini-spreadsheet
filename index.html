@@ -7,18 +7,24 @@
     <link rel="stylesheet" href="./css/styles.css">
 </head>
 <body>
+    <header>
+        <div class="logo-container">
+            <img src="images/claudelogo.jpg" alt="Claude Golden Logo" class="logo">
+            <span class="logo-text">Claude's Mini Spreadsheet</span>
+        </div>
+    </header>
 
     <div id="formulabar">
         <!-- shows the selected cell -->
         <span id="celllabel">A1</span>
 
         <!-- shows what is being typed -->
-        <input type="text" id="formulainput" placeholder="ENTER YOUR VALUE"/>        
+        <input type="text" id="formulainput" placeholder="ENTER YOUR VALUE"/>
     </div>
 
     <!-- javascript will fill up this div -->
     <div id="sheetgrid"></div>
-    
+
     <!-- type ="module to be able to connect all the js files" -->
     <script type="module" src="./js/grid.js"></script>
 </body>
