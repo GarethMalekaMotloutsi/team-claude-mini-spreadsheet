@@ -10,9 +10,12 @@ export function getCell(id) {
 }
 
 export function commitEdit(id, raw) {
-  getCell(id).raw = raw;
-  getCell(id).value = parseFormula(raw, cells);
-  updateDOM(id, getCell(id).value);
+  // data.js owns cell storage and commit lifecycle.
+  // It delegates formula evaluation to parser.js.
+  const cell = getCell(id);
+  cell.raw = raw;
+  cell.value = parseFormula(raw, cells, id);
+  updateDOM(id, cell.value);
 }
 
 export function updateDOM(id, value) {
