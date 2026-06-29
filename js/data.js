@@ -19,4 +19,11 @@ export function updateDOM(id, value) {
   const td = document.querySelector(`[data-cell="${id}"]`);
   if (!td) return;
   td.textContent = value;
+
+   // Color errors with red
+  if (String(value).startsWith("#")) {
+    td.classList.add("cell-error");
+  } else {
+    td.classList.remove("cell-error");
+  }
 }
