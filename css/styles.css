@@ -84,3 +84,9 @@ td.selected {
     background-color: #f1f2f4;
     outline: 2px solid #35ee1d;
 }
+
+/* making errors red */
+.cell-error {
+    color: red;
+    font-weight: bold;
+}
