@@ -10,12 +10,18 @@ html{
     height: 100%;
 }
 
+.spread-sheet{
+    color: hsla(100, 2%, 70%, 0.834);
+    padding: 5px;
+    text-align: center;
+}
 
 /* Font for the whole page */
 body {
     font-family: Arial, sans-serif;
     padding: 20px;
-    height: 100%
+    height: 90%;
+    background-color: #192018;
 }
 
 /* formularbar */
