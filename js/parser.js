@@ -29,6 +29,11 @@ export function parseFormula(formula, cells, currentCellId) {
     }
 }
 
+const ERRORS = {
+    DIV_ZERO: "#DIV/0",
+    SYNTAX: "#ERROR"
+};
+
 function evaluateExpression(expression, currentCellId, cells) {
     // Try to match function calls: SUM(...), AVERAGE(...), IF(...)
     const functionMatch = expression.match(/^(SUM|AVERAGE|IF)\s*\((.*)\)$/i);
@@ -49,378 +54,238 @@ function evaluateExpression(expression, currentCellId, cells) {
     }
 
     // Handle direct cell references and numeric values: A1 or 5
-    const singleValueMatch = expression.match(/^([A-Z]+\d+|\d+)$/);
+    const singleValueMatch = expression.match(/^([A-Z]+\d+|\d+(?:\.\d+)?)$/);
     if (singleValueMatch) {
-        return getValue(singleValueMatch[1], cells, currentCellId);
+        const value = getValue(singleValueMatch[1], cells, currentCellId);
+        return typeof value === "number" ? value : value;
     }
 
     // Try to match simple binary operations: A1 + B1, 5 * C3, etc.
     const binaryMatch = expression.match(
-        /^([A-Z]+\d+|\d+)\s*([+\-*/])\s*([A-Z]+\d+|\d+)$/
+        /^([A-Z]+\d+|\d+(?:\.\d+)?)\s*([+\-*/])\s*([A-Z]+\d+|\d+(?:\.\d+)?)$/
     );
 
     if (!binaryMatch) {
         return "#ERROR";
     }
 
-    let [, left, operator, right] = binaryMatch;
+    let [, leftToken, operator, rightToken] = binaryMatch;
 
-    left = getValue(left, cells, currentCellId);
-    right = getValue(right, cells, currentCellId);
+    const left = getValue(leftToken, cells, currentCellId);
+    const right = getValue(rightToken, cells, currentCellId);
+
+    if (typeof left !== "number") return left;
+    if (typeof right !== "number") return right;
 
     switch (operator) {
-
         case "+":
             return left + right;
-
         case "-":
             return left - right;
-
         case "*":
             return left * right;
-
         case "/":
-
             if (right === 0) {
                 return ERRORS.DIV_ZERO;
             }
-
             return left / right;
-
         default:
             return ERRORS.SYNTAX;
     }
 }
 
-/**
- * Evaluates SUM(range) function.
- * Example: SUM(A1:A5) returns the sum of all numeric values in the range.
- */
-function evaluateSUM(args, cells) {
-    const rangeStr = args.trim();
-    const rangeCells = getRangeCells(rangeStr, cells);
+function evaluateValue(valueStr, cells, currentCellId) {
+    if (typeof valueStr !== "string") return valueStr;
+    const trimmed = valueStr.trim();
 
-    if (rangeCells.length === 0) {
-        return 0;
+    if (trimmed.startsWith("=")) {
+        return parseFormula(trimmed, cells, currentCellId);
     }
 
-    let sum = 0;
-    for (const cell of rangeCells) {
-        const val = Number(cell.value);
-        if (!isNaN(val)) {
-            sum += val;
-        }
+    if (/^[A-Z]+\d+$/.test(trimmed)) {
+        return getValue(trimmed, cells, currentCellId);
     }
 
-    return sum;
-}
-
-/**
- * Evaluates AVERAGE(range) function.
- * Example: AVERAGE(A1:A5) returns the average of all numeric values in the range.
- */
-function evaluateAVERAGE(args, cells) {
-    const rangeStr = args.trim();
-    const rangeCells = getRangeCells(rangeStr, cells);
-
-    if (rangeCells.length === 0) {
-        return 0;
-    }
-
-    let sum = 0;
-    let count = 0;
-    for (const cell of rangeCells) {
-        const val = Number(cell.value);
-        if (!isNaN(val)) {
-            sum += val;
-            count++;
-        }
-    }
-
-    if (count === 0) {
-        return 0;
-    }
-
-    return sum / count;
-}
-
-/**
- * Evaluates IF(condition, trueValue, falseValue) function.
- * Example: IF(A1>5, 10, 20) returns 10 if A1 > 5, otherwise 20.
- * Supports operators: >, <, >=, <=, =, !=
- */
-function evaluateIF(args, cells) {
-    // Split arguments by comma, but need to be careful about nested commas
-    const parts = splitFunctionArgs(args);
-    if (parts.length !== 3) {
-        return "#ERROR";
-    }
-
-    const [conditionStr, trueValueStr, falseValueStr] = parts.map(p => p.trim());
-
-    // Evaluate the condition
-    const conditionResult = evaluateCondition(conditionStr, cells);
-    if (conditionResult === "#ERROR") {
-        return "#ERROR";
-    }
-
-    // Get the appropriate value based on condition result
-    const resultStr = conditionResult ? trueValueStr : falseValueStr;
-
-    // Evaluate the result value (could be a cell reference or a number)
-    return evaluateValue(resultStr, cells);
-}
-
-/**
- * Splits function arguments by commas, respecting nested parentheses.
- */
-function splitFunctionArgs(args) {
-    const parts = [];
-    let current = "";
-    let depth = 0;
-
-    for (let i = 0; i < args.length; i++) {
-        const char = args[i];
-        if (char === "(" || char === "[") {
-            depth++;
-            current += char;
-        } else if (char === ")" || char === "]") {
-            depth--;
-            current += char;
-        } else if (char === "," && depth === 0) {
-            parts.push(current);
-            current = "";
-        } else {
-            current += char;
-        }
-    }
-
-    if (current) {
-        parts.push(current);
-    }
-
-    return parts;
-}
-
-/**
- * Evaluates a condition like "A1>5" or "B2=10".
- * Returns true or false; returns #ERROR for invalid conditions.
- */
-function evaluateCondition(conditionStr, cells) {
-    // Match patterns like: A1 > 5, B2 = 10, C3 != 0, etc.
-    const conditionMatch = conditionStr.match(/^([A-Z]+\d+|\d+)\s*(>|<|>=|<=|=|!=|==)\s*([A-Z]+\d+|\d+)$/);
-
-    if (!conditionMatch) {
-        return "#ERROR";
-    }
-
-    let [, left, operator, right] = conditionMatch;
-
-    left = getValue(left, cells);
-    right = getValue(right, cells);
-
-    switch (operator) {
-        case ">":
-            return left > right;
-        case "<":
-            return left < right;
-        case ">=":
-            return left >= right;
-        case "<=":
-            return left <= right;
-        case "=":
-        case "==":
-            return left === right;
-        case "!=":
-            return left !== right;
-        default:
-            return "#ERROR";
-    }
-}
-
-/**
- * Evaluates SUM(range) function.
- * Example: SUM(A1:A5) returns the sum of all numeric values in the range.
- */
-function evaluateSUM(args, cells) {
-    const rangeStr = args.trim();
-    const rangeCells = getRangeCells(rangeStr, cells);
-
-    if (rangeCells.length === 0) {
-        return 0;
-    }
-
-    let sum = 0;
-    for (const cell of rangeCells) {
-        const val = Number(cell.value);
-        if (!isNaN(val)) {
-            sum += val;
-        }
-    }
-
-    return sum;
-}
-
-/**
- * Evaluates AVERAGE(range) function.
- * Example: AVERAGE(A1:A5) returns the average of all numeric values in the range.
- */
-function evaluateAVERAGE(args, cells) {
-    const rangeStr = args.trim();
-    const rangeCells = getRangeCells(rangeStr, cells);
-
-    if (rangeCells.length === 0) {
-        return 0;
-    }
-
-    let sum = 0;
-    let count = 0;
-    for (const cell of rangeCells) {
-        const val = Number(cell.value);
-        if (!isNaN(val)) {
-            sum += val;
-            count++;
-        }
-    }
-
-    if (count === 0) {
-        return 0;
-    }
-
-    return sum / count;
-}
-
-/**
- * Evaluates IF(condition, trueValue, falseValue) function.
- * Example: IF(A1>5, 10, 20) returns 10 if A1 > 5, otherwise 20.
- * Supports operators: >, <, >=, <=, =, !=
- */
-function evaluateIF(args, cells) {
-    // Split arguments by comma, but need to be careful about nested commas
-    const parts = splitFunctionArgs(args);
-    if (parts.length !== 3) {
-        return "#ERROR";
-    }
-
-    const [conditionStr, trueValueStr, falseValueStr] = parts.map(p => p.trim());
-
-    // Evaluate the condition
-    const conditionResult = evaluateCondition(conditionStr, cells);
-    if (conditionResult === "#ERROR") {
-        return "#ERROR";
-    }
-
-    // Get the appropriate value based on condition result
-    const resultStr = conditionResult ? trueValueStr : falseValueStr;
-
-    // Evaluate the result value (could be a cell reference or a number)
-    return evaluateValue(resultStr, cells);
-}
-
-/**
- * Splits function arguments by commas, respecting nested parentheses.
- */
-function splitFunctionArgs(args) {
-    const parts = [];
-    let current = "";
-    let depth = 0;
-
-    for (let i = 0; i < args.length; i++) {
-        const char = args[i];
-        if (char === "(" || char === "[") {
-            depth++;
-            current += char;
-        } else if (char === ")" || char === "]") {
-            depth--;
-            current += char;
-        } else if (char === "," && depth === 0) {
-            parts.push(current);
-            current = "";
-        } else {
-            current += char;
-        }
-    }
-
-    if (current) {
-        parts.push(current);
-    }
-
-    return parts;
-}
-
-/**
- * Evaluates a condition like "A1>5" or "B2=10".
- * Returns true or false; returns #ERROR for invalid conditions.
- */
-function evaluateCondition(conditionStr, cells) {
-    // Match patterns like: A1 > 5, B2 = 10, C3 != 0, etc.
-    const conditionMatch = conditionStr.match(/^([A-Z]+\d+|\d+)\s*(>|<|>=|<=|=|!=|==)\s*([A-Z]+\d+|\d+)$/);
-
-    if (!conditionMatch) {
-        return "#ERROR";
-    }
-
-    let [, left, operator, right] = conditionMatch;
-
-    left = getValue(left, cells);
-    right = getValue(right, cells);
-
-    switch (operator) {
-        case ">":
-            return left > right;
-        case "<":
-            return left < right;
-        case ">=":
-            return left >= right;
-        case "<=":
-            return left <= right;
-        case "=":
-        case "==":
-            return left === right;
-        case "!=":
-            return left !== right;
-        default:
-            return "#ERROR";
-    }
-}
-
-/**
- * Evaluates a value which could be a cell reference, a number, or a range.
- */
-function evaluateValue(valueStr, cells) {
-    valueStr = valueStr.trim();
-
-    // Try to parse as a number
-    const numVal = Number(valueStr);
-    if (!isNaN(numVal)) {
-        return numVal;
-    }
-
-    // Try to parse as a cell reference
-    const cellId = parseCellId(valueStr);
-    if (cellId && cells[cellId]) {
-        const val = Number(cells[cellId].value);
-        return isNaN(val) ? 0 : val;
-    }
-
-    // Default to 0 for invalid values
-    return 0;
+    const num = Number(trimmed);
+    return isNaN(num) ? trimmed : num;
 }
 
 function getValue(token, cells, currentCellId) {
-    if (/^\d+$/.test(token)) {
+    if (typeof token !== "string") return 0;
+    if (/^\d+(?:\.\d+)?$/.test(token)) {
         return Number(token);
     }
 
-    if (cells[token]) {
-        const rawValue = cells[token].value;
-        const value = Number(rawValue);
-
-    if (!isNaN(value)) {
-        return value;
+    const cellId = parseCellId(token);
+    if (!cellId) {
+        return 0;
     }
 
-    return 0;
+    const cell = cells[cellId];
+    if (!cell) {
+        return 0;
+    }
+
+    if (cell.raw && cell.raw.startsWith("=")) {
+        if (cellId === currentCellId) {
+            return "#CIRCULAR";
+        }
+        const result = parseFormula(cell.raw, cells, cellId);
+        return result;
+    }
+
+    if (cell.value === "#CIRCULAR" || cell.value === "#ERROR" || cell.value === "#DIV/0") {
+        return cell.value;
+    }
+
+    const numericValue = Number(cell.value);
+    return isNaN(numericValue) ? 0 : numericValue;
+}
+
+/**
+ * Evaluates SUM(range) function.
+ * Example: SUM(A1:A5) returns the sum of all numeric values in the range.
+ */
+function evaluateSUM(args, cells) {
+    const rangeStr = args.trim();
+    const rangeCells = getRangeCells(rangeStr, cells);
+
+    if (rangeCells.length === 0) {
+        return 0;
+    }
+
+    let sum = 0;
+    for (const cell of rangeCells) {
+        const val = Number(cell.value);
+        if (!isNaN(val)) {
+            sum += val;
+        }
+    }
+
+    return sum;
+}
+
+/**
+ * Evaluates AVERAGE(range) function.
+ * Example: AVERAGE(A1:A5) returns the average of all numeric values in the range.
+ */
+function evaluateAVERAGE(args, cells) {
+    const rangeStr = args.trim();
+    const rangeCells = getRangeCells(rangeStr, cells);
+
+    if (rangeCells.length === 0) {
+        return 0;
+    }
+
+    let sum = 0;
+    let count = 0;
+    for (const cell of rangeCells) {
+        const val = Number(cell.value);
+        if (!isNaN(val)) {
+            sum += val;
+            count++;
+        }
+    }
+
+    if (count === 0) {
+        return 0;
+    }
+
+    return sum / count;
+}
+
+/**
+ * Evaluates IF(condition, trueValue, falseValue) function.
+ * Example: IF(A1>5, 10, 20) returns 10 if A1 > 5, otherwise 20.
+ * Supports operators: >, <, >=, <=, =, !=
+ */
+function evaluateIF(args, cells) {
+    // Split arguments by comma, but need to be careful about nested commas
+    const parts = splitFunctionArgs(args);
+    if (parts.length !== 3) {
+        return "#ERROR";
+    }
+
+    const [conditionStr, trueValueStr, falseValueStr] = parts.map(p => p.trim());
+
+    // Evaluate the condition
+    const conditionResult = evaluateCondition(conditionStr, cells);
+    if (conditionResult === "#ERROR") {
+        return "#ERROR";
+    }
+
+    // Get the appropriate value based on condition result
+    const resultStr = conditionResult ? trueValueStr : falseValueStr;
+
+    // Evaluate the result value (could be a cell reference or a number)
+    return evaluateValue(resultStr, cells);
+}
+
+/**
+ * Splits function arguments by commas, respecting nested parentheses.
+ */
+function splitFunctionArgs(args) {
+    const parts = [];
+    let current = "";
+    let depth = 0;
+
+    for (let i = 0; i < args.length; i++) {
+        const char = args[i];
+        if (char === "(" || char === "[") {
+            depth++;
+            current += char;
+        } else if (char === ")" || char === "]") {
+            depth--;
+            current += char;
+        } else if (char === "," && depth === 0) {
+            parts.push(current);
+            current = "";
+        } else {
+            current += char;
+        }
+    }
+
+    if (current) {
+        parts.push(current);
+    }
+
+    return parts;
+}
+
+/**
+ * Evaluates a condition like "A1>5" or "B2=10".
+ * Returns true or false; returns #ERROR for invalid conditions.
+ */
+function evaluateCondition(conditionStr, cells) {
+    // Match patterns like: A1 > 5, B2 = 10, C3 != 0, etc.
+    const conditionMatch = conditionStr.match(/^([A-Z]+\d+|\d+)\s*(>|<|>=|<=|=|!=|==)\s*([A-Z]+\d+|\d+)$/);
+
+    if (!conditionMatch) {
+        return "#ERROR";
+    }
+
+    let [, left, operator, right] = conditionMatch;
+
+    left = getValue(left, cells);
+    right = getValue(right, cells);
+
+    switch (operator) {
+        case ">":
+            return left > right;
+        case "<":
+            return left < right;
+        case ">=":
+            return left >= right;
+        case "<=":
+            return left <= right;
+        case "=":
+        case "==":
+            return left === right;
+        case "!=":
+            return left !== right;
+        default:
+            return "#ERROR";
+    }
 }
 
 // ===== UTILITY FUNCTIONS =====
@@ -440,28 +305,49 @@ export function parseCellId(token) {
  * Converts a range string like "A1:C3" into an array of cell IDs.
  * Returns an empty array if the range is invalid.
  */
+function columnLabelToNumber(label) {
+    let number = 0;
+    for (const char of label) {
+        number = number * 26 + (char.charCodeAt(0) - 64);
+    }
+    return number;
+}
+
+function numberToColumnLabel(number) {
+    let label = "";
+    while (number > 0) {
+        const remainder = (number - 1) % 26;
+        label = String.fromCharCode(65 + remainder) + label;
+        number = Math.floor((number - 1) / 26);
+    }
+    return label;
+}
+
 export function parseRange(rangeStr) {
     if (typeof rangeStr !== "string") return [];
 
     const parts = rangeStr.split(":");
     if (parts.length !== 2) return [];
 
-    const startCell = parseCellId(parts[0].trim());
-    const endCell = parseCellId(parts[1].trim());
+    const startMatch = parseCellId(parts[0].trim());
+    const endMatch = parseCellId(parts[1].trim());
 
-    if (!startCell || !endCell) return [];
+    if (!startMatch || !endMatch) return [];
 
-    const startCol = startCell.charCodeAt(0);
-    const startRow = parseInt(startCell.slice(1));
-    const endCol = endCell.charCodeAt(0);
-    const endRow = parseInt(endCell.slice(1));
+    const startColLabel = startMatch.match(/^([A-Z]+)\d+$/)[1];
+    const endColLabel = endMatch.match(/^([A-Z]+)\d+$/)[1];
+    const startRow = parseInt(startMatch.slice(startColLabel.length), 10);
+    const endRow = parseInt(endMatch.slice(endColLabel.length), 10);
+
+    const startCol = columnLabelToNumber(startColLabel);
+    const endCol = columnLabelToNumber(endColLabel);
 
     if (isNaN(startRow) || isNaN(endRow)) return [];
 
     const cells = [];
     for (let col = Math.min(startCol, endCol); col <= Math.max(startCol, endCol); col++) {
         for (let row = Math.min(startRow, endRow); row <= Math.max(startRow, endRow); row++) {
-            cells.push(`${String.fromCharCode(col)}${row}`);
+            cells.push(`${numberToColumnLabel(col)}${row}`);
         }
     }
 
@@ -490,11 +376,18 @@ export function getRangeCells(rangeStr, cells) {
  */
 export function extractDependencies(expression) {
     const deps = new Set();
+    if (typeof expression !== "string") return [];
+
+    const rangePattern = /([A-Z]+\d+):([A-Z]+\d+)/g;
+    let rangeMatch;
+    while ((rangeMatch = rangePattern.exec(expression)) !== null) {
+        parseRange(rangeMatch[0]).forEach(dep => deps.add(dep));
+    }
 
     const cellReferencePattern = /[A-Z]+\d+/g;
     const matches = expression.match(cellReferencePattern);
     if (!matches) {
-        return [];
+        return Array.from(deps);
     }
 
     for (const match of matches) {

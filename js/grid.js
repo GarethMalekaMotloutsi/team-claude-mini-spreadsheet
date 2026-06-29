@@ -1,20 +1,23 @@
 import { getCell, commitEdit } from './data.js';
 
-
 class SpreadsheetGrid {
-    constructor( rows = 20, cols = 10) {
+    constructor(rows = 20, cols = 10) {
         this.container = document.getElementById("sheetgrid");
+        if (!this.container) {
+            return;
+        }
+
         this.rows = rows;
         this.cols = cols;
-        // e.g. "A1"
-        this.selectedCell = null; 
+        this.selectedCell = null;
 
-        // method calls
         this.render();
         this.attachEvents();
+        this.selectCell("A1");
+        this.container.style.display = 'block';
     }
 
-    // Building the grid DOM 
+    // Building the grid DOM
     render() {
         // creating table element
         const table = document.createElement("table");
@@ -27,11 +30,11 @@ class SpreadsheetGrid {
         // loop to count from 0-9 which is A - J and return a letter for every count 65 = "A" in ASCII
         for (let c = 0; c < this.cols; c++) {
             const th = document.createElement("th");
-            th.textContent = String.fromCharCode(65 + c); 
+            th.textContent = String.fromCharCode(65 + c);
             headerRow.appendChild(th);
         }
         table.appendChild(headerRow);
-        
+
         // Data rows (1-20)
         for (let r = 1; r <= this.rows; r++) {
             const tr = document.createElement("tr");
@@ -44,9 +47,9 @@ class SpreadsheetGrid {
             for (let c = 0; c < this.cols; c++) {
                 const td = document.createElement("td");
                 const colLetter = String.fromCharCode(65 + c);
-                const cellId = `${colLetter}${r}`; 
+                const cellId = `${colLetter}${r}`;
                 td.setAttribute("data-cell", cellId);
-                td.textContent = ""; 
+                td.textContent = "";
                 tr.appendChild(td);
             }
             table.appendChild(tr);
@@ -62,8 +65,8 @@ class SpreadsheetGrid {
             if (cell) {
             this.selectCell(cell.getAttribute("data-cell"));
             }
-        });  
-        
+        });
+
         // arrow key navigation
         document.addEventListener("keydown", (e) => {
             if (!this.selectedCell) return;
@@ -72,7 +75,7 @@ class SpreadsheetGrid {
             if (document.activeElement === document.getElementById("formulainput")) return;
 
             // reading current cell position
-            const col = this.selectedCell.charCodeAt(0); 
+            const col = this.selectedCell.charCodeAt(0);
             const row = parseInt(this.selectedCell.slice(1));
 
 
@@ -91,9 +94,9 @@ class SpreadsheetGrid {
 
             // Converts the numbers back into a cell ID string like "C5" and calls selectCell() to move there
             const newCellId = `${String.fromCharCode(newCol)}${newRow}`;
-            this.selectCell(newCellId); 
-        });  
-        
+            this.selectCell(newCellId);
+        });
+
         // watches the formula bar input for when the user presses Enter.
         document.getElementById("formulainput").addEventListener("keydown", (e) => {
             if (e.key === "Enter" && this.selectedCell) {
@@ -166,4 +169,6 @@ class SpreadsheetGrid {
         document.getElementById("formulainput").value = getCell(cellId).raw;
     }
 }
-const sheet = new SpreadsheetGrid();
+window.addEventListener('load', () => {
+    new SpreadsheetGrid();
+});
