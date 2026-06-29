@@ -48,6 +48,12 @@ function evaluateExpression(expression, currentCellId, cells) {
         }
     }
 
+    // Handle direct cell references and numeric values: A1 or 5
+    const singleValueMatch = expression.match(/^([A-Z]+\d+|\d+)$/);
+    if (singleValueMatch) {
+        return getValue(singleValueMatch[1], cells, currentCellId);
+    }
+
     // Try to match simple binary operations: A1 + B1, 5 * C3, etc.
     const binaryMatch = expression.match(
         /^([A-Z]+\d+|\d+)\s*([+\-*/])\s*([A-Z]+\d+|\d+)$/
@@ -334,7 +340,7 @@ export function getRangeCells(rangeStr, cells) {
 /**
  * Extracts all referenced cell IDs from a formula expression.
  */
-function extractDependencies(expression) {
+export function extractDependencies(expression) {
     const deps = new Set();
 
     const cellReferencePattern = /[A-Z]+\d+/g;
