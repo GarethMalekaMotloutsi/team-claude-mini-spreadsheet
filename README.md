@@ -14,38 +14,59 @@ What It Does
 - Circular references (e.g. A1 = =B1 and B1 = =A1) are detected and shown as `#CIRCULAR`
 - Bad formulas show `#ERROR` instead of crashing
 
+
 Project Structure
+
 team-claude-mini-spreadsheet/
+
 ├── index.html          ← The single page that runs the whole app
+
 ├── css/
+
 │   └── style.css       ← All styling for the grid and UI
+
 └── js/
+
     ├── grid.js         ← Builds and renders the spreadsheet grid
+    
     ├── ui.js           ← Handles user interactions (clicks, typing, selection)
+    
     ├── data.js         ← Stores all cell data and manages updates
+    
     ├── app.js          ← Entry point, connects all the pieces together
+    
     └── config.js       ← Shared settings (rows, columns, defaults)
 
 Team & Responsibilities
 
 Thami Sithole — Grid & Visual Layer
+
 Files: `js/grid.js`, `css/style.css`, `index.html`
+
 Built everything the user sees. This includes rendering the full grid as an HTML table, adding column headers (A–J) and row numbers (1–20), styling the layout so it looks and feels like a real spreadsheet, and setting up the formula bar at the top of the page. Every cell in the grid is given a `data-cell` attribute (e.g. `data-cell="B3"`) so other parts of the code can find and update it by name.
 
 Galaletsang Modise — Data Layer
+
 File: `js/data.js`
+
 Built the data store — the single source of truth for everything in the spreadsheet. Every cell's contents are stored here, including what the user typed (`raw`), what the calculated result is (`value`), and which other cells it reads from (`deps`). Provides three core functions the whole team uses:
 
 Lerato Thungo — Formula Parser
+
 File: `js/parser.js`
+
 Built the brain of the spreadsheet. When a cell contains something like `=A1+B2`, this code reads that instruction, finds the current values of A1 and B2, performs the calculation, and returns the result. It handles plain arithmetic (`+`, `-`, `*`, `/`), cell references, and built-in functions like `SUM(A1:A5)` and `AVERAGE`. Bad or broken formulas return `#ERROR` instead of crashing the app.
 
 Gareth Motloutsi— Dependency Tracking & Cascade Updates
+
 File: `js/dependencies.js` 
+
 Built the "magic" — the part that makes the spreadsheet feel alive. Maintains a map of which cells depend on which other cells. When any cell changes, this code figures out the full chain of affected cells and recalculates them in the correct order using a BFS (queue-based) approach. This means changing A1 automatically updates B1, which automatically updates C1, and so on all the way down the chain.
 
 Thami Sithole — Safety, Circular References & Built-in Functions
+
 File: `js/safety.js`
+
 Built the safety net. Detects circular references before they cause infinite loops — for example, if A1 depends on B1 and B1 depends on A1, this code catches the loop using a DFS (depth-first search) and displays `#CIRCULAR` instead of freezing the browser. Also handles edge cases like empty cells in formulas, division by zero, and text used in arithmetic. Added support for range-based functions like `SUM` and `AVERAGE`.
 
 How to Run
@@ -68,13 +89,21 @@ The project uses ES Modules — JavaScript files that can share functions with e
 
 
 index.html
+
     └── loads grid.js (as a module)
+    
             └── grid.js builds the table, sets up the UI
+            
             └── ui.js handles clicks and keyboard input
+            
                     └── calls commitEdit() from data.js
+                    
                             └── calls evaluate() from formula.js
+                            
                             └── calls recalculate() from dependencies.js
+                            
                                     └── calls hasCycle() from safety.js
+                                    
 
 Review Questions
 
@@ -102,6 +131,5 @@ Tech Stack
 - HTML5 — page structure and grid layout
 - CSS3 — styling, cell selection highlights, error colours
 - Vanilla JavaScript (ES Modules) — all logic, no frameworks
-- **Live Server** — local development server for testing
+- Live Server — local development server for testing
 
-No external libraries. No build tools. No backend.
