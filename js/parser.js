@@ -1,6 +1,4 @@
-import { getCell } from "./data.js";
-
-export function parseFormula(formula, cells) {
+export function parseFormula(formula, cells, currentCellId) {
 
     // If it's not a formula, return it as normal text
     if (!formula.startsWith("=")) {
@@ -10,13 +8,13 @@ export function parseFormula(formula, cells) {
     formula = formula.slice(1).trim();
 
     try {
-        return evaluateFormula(formula, cells);
+        return evaluateFormula(formula, cells, currentCellId);
     } catch (error) {
         return "#ERROR";
     }
 }
 
-function evaluateFormula(expression, cells) {
+function evaluateFormula(expression, cells, currentCellId) {
 
     const match = expression.match(
         /^([A-Z]+\d+|\d+)\s*([+\-*/])\s*([A-Z]+\d+|\d+)$/
