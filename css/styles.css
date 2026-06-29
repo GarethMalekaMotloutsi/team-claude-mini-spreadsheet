@@ -10,10 +10,35 @@ html{
     height: 100%;
 }
 
-.spread-sheet{
-    color: hsla(100, 2%, 70%, 0.834);
-    padding: 5px;
-    text-align: center;
+/* logo and heading */
+.logo-container {
+    max-width: 290px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    height: 64px;
+}
+
+
+.logo {
+    height: 60px;
+    width: auto;
+    object-fit: contain;
+    flex-shrink: 0;
+    display: block;
+    border-radius: 18px;
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+    letter-spacing: -0.3px;
+    text-transform: uppercase;
+    font-weight: 600;
+
 }
 
 /* Font for the whole page */
@@ -21,7 +46,7 @@ body {
     font-family: Arial, sans-serif;
     padding: 20px;
     height: 90%;
-    background-color: #192018;
+    /* background-color: #192018; */
 }
 
 /* formularbar */
@@ -29,6 +54,7 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
+    margin-top: 20px;
     margin-bottom: 10px;
 }
 
