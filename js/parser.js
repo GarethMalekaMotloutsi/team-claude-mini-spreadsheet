@@ -30,12 +30,14 @@ export function parseFormula(formula, cells, currentCellId) {
 }
 
 const ERRORS = {
+    CIRCULAR: "#CIRCULAR",
     DIV_ZERO: "#DIV/0",
+    VALUE: "#VALUE!",
     SYNTAX: "#ERROR"
 };
 
 function evaluateExpression(expression, currentCellId, cells) {
-    // Try to match function calls: SUM(...), AVERAGE(...), IF(...)
+    // Function calls first
     const functionMatch = expression.match(/^(SUM|AVERAGE|IF)\s*\((.*)\)$/i);
     if (functionMatch) {
         const funcName = functionMatch[1].toUpperCase();
@@ -49,49 +51,18 @@ function evaluateExpression(expression, currentCellId, cells) {
             case "IF":
                 return evaluateIF(args, cells);
             default:
-                return "#ERROR";
+                return ERRORS.SYNTAX;
         }
     }
 
-    // Handle direct cell references and numeric values: A1 or 5
-    const singleValueMatch = expression.match(/^([A-Z]+\d+|\d+(?:\.\d+)?)$/);
-    if (singleValueMatch) {
-        const value = getValue(singleValueMatch[1], cells, currentCellId);
-        return typeof value === "number" ? value : value;
-    }
+    // Tokenize expression for arithmetic evaluation (shunting-yard)
+    const tokens = tokenizeExpression(expression);
+    if (!tokens || tokens.length === 0) return ERRORS.SYNTAX;
 
-    // Try to match simple binary operations: A1 + B1, 5 * C3, etc.
-    const binaryMatch = expression.match(
-        /^([A-Z]+\d+|\d+(?:\.\d+)?)\s*([+\-*/])\s*([A-Z]+\d+|\d+(?:\.\d+)?)$/
-    );
+    const rpn = toRPN(tokens);
+    if (!rpn) return ERRORS.SYNTAX;
 
-    if (!binaryMatch) {
-        return "#ERROR";
-    }
-
-    let [, leftToken, operator, rightToken] = binaryMatch;
-
-    const left = getValue(leftToken, cells, currentCellId);
-    const right = getValue(rightToken, cells, currentCellId);
-
-    if (typeof left !== "number") return left;
-    if (typeof right !== "number") return right;
-
-    switch (operator) {
-        case "+":
-            return left + right;
-        case "-":
-            return left - right;
-        case "*":
-            return left * right;
-        case "/":
-            if (right === 0) {
-                return ERRORS.DIV_ZERO;
-            }
-            return left / right;
-        default:
-            return ERRORS.SYNTAX;
-    }
+    return evaluateRPN(rpn, cells, currentCellId);
 }
 
 function evaluateValue(valueStr, cells, currentCellId) {
@@ -134,12 +105,127 @@ function getValue(token, cells, currentCellId) {
         return result;
     }
 
-    if (cell.value === "#CIRCULAR" || cell.value === "#ERROR" || cell.value === "#DIV/0") {
+    // If the cell contains an explicit error marker, propagate it
+    if (typeof cell.value === 'string' && cell.value.startsWith('#')) {
         return cell.value;
     }
 
+    // If the cell has non-numeric text, this is a VALUE error when used in arithmetic
     const numericValue = Number(cell.value);
-    return isNaN(numericValue) ? 0 : numericValue;
+    if (isNaN(numericValue)) {
+        return ERRORS.VALUE;
+    }
+    return numericValue;
+}
+
+// --- Tokenizer, shunting-yard, and RPN evaluator ---
+function tokenizeExpression(expr) {
+    const tokens = [];
+    const re = /([A-Z]+\d+)|([0-9]+(?:\.[0-9]+)?)|([+\-*/()])/gi;
+    let match;
+    let lastIndex = 0;
+    while ((match = re.exec(expr)) !== null) {
+        const [token] = match;
+        // capture any skipped characters (invalid)
+        if (match.index > lastIndex) return null;
+        lastIndex = re.lastIndex;
+        tokens.push(token);
+    }
+    // handle unary minus: convert '-' to 'u-' when appropriate
+    const out = [];
+    for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t === '-' ) {
+            const prev = out[out.length - 1];
+            if (!prev || prev === '(' || ['+','-','*','/'].includes(prev)) {
+                out.push('u-');
+                continue;
+            }
+        }
+        out.push(t);
+    }
+    return out;
+}
+
+function toRPN(tokens) {
+    const output = [];
+    const ops = [];
+    const prec = { 'u-': 4, '*': 3, '/': 3, '+': 2, '-': 2 };
+    const rightAssoc = { 'u-': true };
+
+    for (const token of tokens) {
+        if (/^[0-9]/.test(token) || /^[A-Z]+\d+$/.test(token)) {
+            output.push(token);
+        } else if (token === '+' || token === '-' || token === '*' || token === '/' || token === 'u-') {
+            while (ops.length > 0) {
+                const top = ops[ops.length -1];
+                if (top === '(') break;
+                const topPrec = prec[top] || 0;
+                const tokPrec = prec[token] || 0;
+                if ((rightAssoc[token] && tokPrec < topPrec) || (!rightAssoc[token] && tokPrec <= topPrec)) {
+                    output.push(ops.pop());
+                } else break;
+            }
+            ops.push(token);
+        } else if (token === '(') {
+            ops.push(token);
+        } else if (token === ')') {
+            let found = false;
+            while (ops.length > 0) {
+                const top = ops.pop();
+                if (top === '(') { found = true; break; }
+                output.push(top);
+            }
+            if (!found) return null; // mismatched parens
+        } else {
+            return null; // unknown token
+        }
+    }
+
+    while (ops.length > 0) {
+        const top = ops.pop();
+        if (top === '(' || top === ')') return null;
+        output.push(top);
+    }
+
+    return output;
+}
+
+function evaluateRPN(rpn, cells, currentCellId) {
+    const stack = [];
+    for (const token of rpn) {
+        if (/^[0-9]/.test(token)) {
+            stack.push(Number(token));
+        } else if (/^[A-Z]+\d+$/.test(token)) {
+            const val = getValue(token, cells, currentCellId);
+            if (typeof val === 'string' && val.startsWith('#')) return val;
+            if (typeof val !== 'number') return ERRORS.VALUE;
+            stack.push(val);
+        } else if (token === 'u-') {
+            if (stack.length < 1) return ERRORS.SYNTAX;
+            const v = stack.pop();
+            if (typeof v !== 'number') return ERRORS.VALUE;
+            stack.push(-v);
+        } else if (['+','-','*','/'].includes(token)) {
+            if (stack.length < 2) return ERRORS.SYNTAX;
+            const b = stack.pop();
+            const a = stack.pop();
+            if (typeof a !== 'number' || typeof b !== 'number') return ERRORS.VALUE;
+            switch (token) {
+                case '+': stack.push(a + b); break;
+                case '-': stack.push(a - b); break;
+                case '*': stack.push(a * b); break;
+                case '/':
+                    if (b === 0) return ERRORS.DIV_ZERO;
+                    stack.push(a / b);
+                    break;
+            }
+        } else {
+            return ERRORS.SYNTAX;
+        }
+    }
+    if (stack.length !== 1) return ERRORS.SYNTAX;
+    return stack[0];
 }
 
 /**

@@ -41,7 +41,7 @@ function refreshAllCells() {
       const cell = cells[id];
       const newValue = parseFormula(cell.raw, cells, id);
       if (cell.value !== newValue) {
-        cell.value = newValue;
+        cell.value = String(newValue);
         changed = true;
       }
     }
